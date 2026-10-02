@@ -70,3 +70,5 @@ gradle/
 # Exception for libs.versions.toml
 !gradle/libs.versions.toml
 CLAUDE.md
+*.apk
+
