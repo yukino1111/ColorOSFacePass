@@ -1,81 +1,46 @@
-<h1 align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/biometric_banner_dark.png">
-    <img src=".github/assets/biometric_banner_light.png" alt="Biometric Bypass">
-  </picture>
-</h1>
+# ColorOSFaceBiometricFix
 
-<p align="center">
-  Streamlines face unlock by skipping biometric confirmation in System UI (Android 10+)
-</p>
+[![Android](https://img.shields.io/badge/Android-14%2B-3DDC84?style=for-the-badge&logo=android&logoColor=white)](#)
+[![ColorOS](https://img.shields.io/badge/ColorOS-14%20%7C%2015%20%7C%2016-00C775?style=for-the-badge)](#)
+[![LibXposed](https://img.shields.io/badge/LibXposed-API_101-ff69b4?style=for-the-badge)](#)
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Android-10%2B-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android 10+" />
-  <img src="https://img.shields.io/badge/libxposed-API_101-ff69b4?style=for-the-badge" alt="libxposed API 101" />
-  <a href="https://github.com/hxreborn/biometric-bypass/releases/latest"><img src="https://img.shields.io/github/v/release/hxreborn/biometric-bypass?style=for-the-badge&logo=github" alt="Release" /></a>
-  <a href="https://github.com/hxreborn/biometric-bypass/actions/workflows/android.yml"><img src="https://img.shields.io/github/actions/workflow/status/hxreborn/biometric-bypass/android.yml?label=build&style=for-the-badge&logo=githubactions&logoColor=white" alt="Build" /></a>
-</p>
+专为 ColorOS 打造的生物识别全能增强模块，二合一整合 **人脸弱生物识别提权** 与 **自动确认免二次点击**，并配备现代化 Material 3 应用规则管理界面。
 
-<p align="center">
-  <a href="https://f-droid.org/packages/eu.rafareborn.biometricbypass"><img src=".github/assets/badge_fdroid.png" height="60" alt="Get it on F-Droid" /></a>
-  <a href="https://apt.izzysoft.de/packages/eu.rafareborn.biometricbypass"><img src=".github/assets/badge_izzyondroid.png" height="60" alt="Get it on IzzyOnDroid" /></a>
-  <a href="../../releases"><img src=".github/assets/badge_github.png" height="60" alt="Get it on GitHub" /></a>
-  <a href="http://apps.obtainium.imranr.dev/redirect.html?r=obtainium://app/%7B%22id%22%3A%22eu.rafareborn.biometricbypass%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Fhxreborn%2Fbiometric-bypass%22%2C%22author%22%3A%22rafareborn%22%2C%22name%22%3A%22Biometric%20Bypass%22%2C%22additionalSettings%22%3A%22%7B%5C%22includePrereleases%5C%22%3Afalse%7D%22%7D"><img src=".github/assets/badge_obtainium.png" height="60" alt="Get it on Obtainium" /></a>
-</p>
+---
 
-## Overview
+## ✨ 核心特性
 
-This Xposed module streamlines face unlock by skipping the confirmation step enforced after biometric authentication. The bypass applies system-wide, so it works across all apps, including banking or security-sensitive ones.
+- 🔓 **ColorOS 人脸提权 (Class 3 增强)**
+  - 拦截 `PreAuthInfo` 与 `Utils.isAtLeastStrength`，将 ColorOS 默认上报的 4095 私有弱强度提升为 Class 3 (15 强生物识别)；
+  - 完美解决微信支付、支付宝、手机银行及各类第三方 App 无法使用人脸识别的问题。
 
-By default, even after your face is recognized, Android makes you tap to confirm before it lets you through, turning face unlock into a two-step chore. This module removes that step across all biometric flows, regardless of how each app is built.
+- ⚡ **智能秒点与全无感隐藏 (Biometric Bypass)**
+  - 识别成功后自动跳过繁琐的“点击确认”环节；
+  - 支持“隐藏确认弹窗”全局开关，实现透明极速通过，体验媲美旗舰级 3D 结构光。
 
-## How it Works
+- 🎨 **Material 3 全功能配置中心**
+  - **黑白名单随心换**：支持白名单模式（仅勾选生效）与黑名单模式（勾选排除）；
+  - **精准分类检索**：支持按应用名称与包名双向实时检索，一键切换「全部 / 用户 / 系统」应用；
+  - **极速操作**：支持全局一键全选 / 全不选，以及标准 JSON 规则导入导出。
 
-Android 10 (API 29) added support for passive biometric flows via the [`setConfirmationRequired(false)`](https://developer.android.com/identity/sign-in/biometric-auth#no-explicit-user-action) flag in the BiometricPrompt API. This lets apps skip the "tap to confirm" step after face unlock, but only if:
+- 🚀 **原生 ContentProvider 实时直连**
+  - 底层 Hook 与 App 配置采用原生 ContentProvider 毫秒级直连传输；
+  - **在 App 里任何时候勾选/取消应用，下一秒打开软件 100% 实时生效，日常配置无需重启设备！**
 
-- The app explicitly sets the flag to `false`
-- The biometric method is classified as Class 3 (strong) (e.g. secure face unlock on Pixel 8+)
+---
 
-Most apps don't set this flag, and even when they do, some components still enforce the confirmation dialog.
+## 📲 安装与使用指南
 
-This module hooks `System UI` directly to remove that dialog, simulating the intended behavior system-wide no matter what the app does.
+1. 确保系统已激活 **LSPosed** 框架（支持现代 LibXposed 规范）；
+2. 下载并安装最新版 Release APK；
+3. 在 LSPosed 管理器中启用模块，并确保勾选推荐的作用域：
+   - **系统框架 (System Framework / `system`)** —— 用于人脸 4095 提权；
+   - **系统界面 (System UI / `com.android.systemui`)** —— 用于自动跳过点击与隐藏弹窗；
+4. **仅首次安装激活时**：软重启一次系统框架（或重启手机一次）以加载底层 Hook；
+5. 打开桌面应用，在白名单中勾选需要启用人脸识别与免确认的应用即可，即勾即生效！
 
-## Visual Comparison
+---
 
-| Default Behavior | Module Enabled |
-|:---:|:---:|
-| <img src="media/module_disabled.gif" width="220" alt="Face unlock requiring manual confirmation" /> | <img src="media/module_enabled.gif" width="220" alt="Face unlock with confirmation bypassed" /> |
-| Face unlock with manual confirmation required | Face unlock with automatic confirmation bypass |
+## 📜 开源许可
 
-## Compatibility
-
-- **Android Versions:** 10 and up (API 29+)
-- **ROM Support:** AOSP-based ROMs, Pixel, and other close-to-stock systems.
-  OEM ROMs (e.g. MIUI, OneUI) are not tested and probably won't work due to heavy modifications
-- **App Support:** Works globally, including banking and security-sensitive apps, by applying the bypass system-wide
-
-## Installation
-
-1. Install [Xposed](https://github.com/LSPosed/LSPosed/releases) with API 101 support
-2. Download and install the module APK
-3. In your Xposed manager, enable the module and apply it to `System UI`
-4. Restart `System UI` or reboot the device
-
-## Legacy Xposed Support (Archived)
-
-These branches are unmaintained and only exist for migration or historical reference:
-
-- [Legacy Xposed - Java](https://github.com/hxreborn/biometric-bypass/tree/legacy-xposed-java)
-- [Legacy Xposed - Kotlin](https://github.com/hxreborn/biometric-bypass/tree/legacy-xposed-kotlin)
-
-## Risks
-
-Bypassing confirmation reduces friction and security. If someone spoofs your face or waves your phone at you while you're asleep, they get in. Use responsibly.
-
-## Contributing
-
-Pull requests are welcome. [Issues](../../issues) too.
-
-## License
-
-MIT. Use it, fork it, misconfigure it.
+本项目基于 MIT 许可开源。
