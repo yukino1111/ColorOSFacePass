@@ -8,85 +8,226 @@ import android.widget.Button
 import eu.rafareborn.biometricbypass.TAG
 import eu.rafareborn.biometricbypass.data.ConfigClient
 import eu.rafareborn.biometricbypass.module
+import java.lang.ref.WeakReference
 import java.lang.reflect.Field
 import java.lang.reflect.Method
+import java.util.Collections
+import java.util.WeakHashMap
 
 object BiometricBypassHook {
+    private const val TYPE_FACE = 8 // android.hardware.biometrics.BiometricAuthenticator.TYPE_FACE
+
+    private const val AUTH_CONTROLLER_CLASS = "com.android.systemui.biometrics.AuthController"
     private val TARGET_CLASSES =
         listOf(
             "com.android.systemui.biometrics.prompt.ui.AuthContainerView",
             "com.android.systemui.biometrics.AuthContainerView",
         )
-    private const val TARGET_METHOD = "onDialogAnimatedIn"
+    private const val TARGET_METHOD_ANIMATED_IN = "onDialogAnimatedIn"
     private const val CONFIG_FIELD = "mConfig"
     private const val OP_PACKAGE_FIELD = "mOpPackageName"
     private const val BUTTON_CONFIRM_ID = "button_confirm"
 
-    private const val MAX_WAIT_MS = 1_500L
+    private const val EVENT_MAX_WAIT_MS = 1_000L
 
     private var configField: Field? = null
     private var opPackageNameField: Field? = null
+    private var currentDialogField: Field? = null
+
+    private var activeContainerView: WeakReference<View>? = null
+    private val confirmedViews = Collections.newSetFromMap(WeakHashMap<View, Boolean>())
 
     @Volatile
     private var confirmButtonId: Int = 0
 
     fun hook(classLoader: ClassLoader) {
+        hookAuthContainerView(classLoader)
+        hookAuthController(classLoader)
+    }
+
+    private fun hookAuthContainerView(classLoader: ClassLoader) {
         val targetClass =
             TARGET_CLASSES.firstNotNullOfOrNull { name ->
                 runCatching { classLoader.loadClass(name) }.getOrNull()
-            } ?: throw ClassNotFoundException(
-                "AuthContainerView not on any known path $TARGET_CLASSES",
-            )
-
-        val targetMethod =
-            targetClass.zeroArgMethodByBaseName(TARGET_METHOD)
-                ?: throw NoSuchMethodException("no $TARGET_METHOD variant on ${targetClass.name}")
+            } ?: run {
+                module.log(Log.WARN, TAG, "AuthContainerView not found on known paths $TARGET_CLASSES")
+                return
+            }
 
         configField = targetClass.fieldByBaseName(CONFIG_FIELD)
         opPackageNameField = configField?.type?.fieldByBaseName(OP_PACKAGE_FIELD)
-        if (opPackageNameField == null) {
-            module.log(Log.WARN, TAG, "op package field unresolved pkg=unknown in logs")
+
+        // 1. Hook onDialogAnimatedIn for tracking & optional transparent dialog hiding
+        val animInMethod = targetClass.zeroArgMethodByBaseName(TARGET_METHOD_ANIMATED_IN)
+        if (animInMethod != null) {
+            module.hook(animInMethod).intercept { chain ->
+                chain.proceed()
+
+                val authContainerView = chain.thisObject as? View ?: return@intercept null
+                activeContainerView = WeakReference(authContainerView)
+
+                val context = authContainerView.context
+                val opPackageName = readOpPackageName(authContainerView)
+
+                if (ConfigClient.isAllowed(context, opPackageName) && ConfigClient.isHideDialog(context)) {
+                    authContainerView.alpha = 0f
+                }
+                null
+            }
+            module.log(Log.INFO, TAG, "hooked animated-in on ${targetClass.name}#${animInMethod.name}")
         }
 
-        module.hook(targetMethod).intercept { chain ->
-            chain.proceed()
-
-            val authContainerView = chain.thisObject as? View ?: return@intercept null
-            val context = authContainerView.context
-            val opPackageName = readOpPackageName(authContainerView)
-
-            if (!ConfigClient.isAllowed(context, opPackageName)) {
-                module.log(Log.INFO, TAG, "skipped confirm by rule for pkg=$opPackageName")
-                return@intercept null
+        // 2. Hook onAuthenticationFailed to restore dialog visibility if it was hidden
+        val failMethods = targetClass.declaredMethods.filter { it.name.startsWith("onAuthenticationFailed") }
+        for (failMethod in failMethods) {
+            failMethod.isAccessible = true
+            module.hook(failMethod).intercept { chain ->
+                val result = chain.proceed()
+                val authContainerView = chain.thisObject as? View
+                if (authContainerView != null && authContainerView.alpha < 1f) {
+                    authContainerView.post { authContainerView.alpha = 1f }
+                }
+                result
             }
-
-            if (ConfigClient.isHideDialog(context)) {
-                authContainerView.alpha = 0f
-            }
-
-            if (confirmButtonId == 0) {
-                @SuppressLint("DiscouragedApi")
-                val id =
-                    context.resources.getIdentifier(BUTTON_CONFIRM_ID, "id", context.packageName)
-                confirmButtonId = id
-            }
-            val buttonId = confirmButtonId
-
-            if (buttonId == 0) {
-                module.log(Log.WARN, TAG, "button missing id pkg=$opPackageName")
-                return@intercept null
-            }
-
-            val startUptimeMs = SystemClock.uptimeMillis()
-            if (clickConfirm(authContainerView, buttonId, opPackageName, startUptimeMs)) {
-                return@intercept null
-            }
-
-            retryUntilShown(authContainerView, buttonId, opPackageName, startUptimeMs)
-            null
         }
 
-        module.log(Log.INFO, TAG, "hooked confirm on ${targetClass.name}#${targetMethod.name}")
+        // 3. Fallback for older Android (10-14): hook onAuthenticationSucceeded(int modality) directly on AuthContainerView if present
+        val authSucceedMethod =
+            targetClass.declaredMethods.firstOrNull {
+                it.name == "onAuthenticationSucceeded" &&
+                    it.parameterCount >= 1 &&
+                    it.parameterTypes[0] == Int::class.javaPrimitiveType
+            }
+        if (authSucceedMethod != null) {
+            authSucceedMethod.isAccessible = true
+            module.hook(authSucceedMethod).intercept { chain ->
+                val modality = chain.getArg(0) as? Int ?: 0
+                val result = chain.proceed()
+
+                if (modality != TYPE_FACE) {
+                    module.log(Log.DEBUG, TAG, "ignored non-face modality=$modality on AuthContainerView")
+                    return@intercept result
+                }
+
+                val authContainerView = chain.thisObject as? View ?: return@intercept result
+                val context = authContainerView.context
+                val opPackageName = readOpPackageName(authContainerView)
+
+                if (!ConfigClient.isAllowed(context, opPackageName)) {
+                    module.log(Log.INFO, TAG, "skipped face confirm by rule for pkg=$opPackageName")
+                    return@intercept result
+                }
+
+                triggerFaceConfirm(authContainerView, opPackageName)
+                result
+            }
+            module.log(Log.INFO, TAG, "hooked onAuthenticationSucceeded fallback on ${targetClass.name}")
+        }
+    }
+
+    private fun hookAuthController(classLoader: ClassLoader) {
+        val authControllerClass = runCatching { classLoader.loadClass(AUTH_CONTROLLER_CLASS) }.getOrNull()
+        if (authControllerClass == null) {
+            module.log(Log.WARN, TAG, "AuthController not found in classloader")
+            return
+        }
+
+        currentDialogField = authControllerClass.fieldByBaseName("mCurrentDialog")
+
+        // Hook onBiometricAuthenticated(int modality)
+        val onBiometricAuthenticatedMethod =
+            authControllerClass.declaredMethods.firstOrNull {
+                it.name == "onBiometricAuthenticated" &&
+                    it.parameterCount == 1 &&
+                    it.parameterTypes[0] == Int::class.javaPrimitiveType
+            }
+
+        if (onBiometricAuthenticatedMethod != null) {
+            onBiometricAuthenticatedMethod.isAccessible = true
+            module.hook(onBiometricAuthenticatedMethod).intercept { chain ->
+                val modality = chain.getArg(0) as? Int ?: 0
+                val result = chain.proceed()
+
+                // 严格限定认证模态：只有人脸认证成功 (TYPE_FACE == 8) 才触发自动继续
+                if (modality != TYPE_FACE) {
+                    module.log(Log.DEBUG, TAG, "ignored non-face modality=$modality on AuthController")
+                    return@intercept result
+                }
+
+                val currentDialog =
+                    (currentDialogField?.get(chain.thisObject) as? View)
+                        ?: activeContainerView?.get()
+
+                if (currentDialog == null) {
+                    module.log(Log.WARN, TAG, "face authenticated but current dialog is null")
+                    return@intercept result
+                }
+
+                val context = currentDialog.context
+                val opPackageName = readOpPackageName(currentDialog)
+
+                if (!ConfigClient.isAllowed(context, opPackageName)) {
+                    module.log(Log.INFO, TAG, "skipped face confirm by rule for pkg=$opPackageName")
+                    return@intercept result
+                }
+
+                // 事件驱动：人脸识别成功事件触发后，立即完成确认
+                triggerFaceConfirm(currentDialog, opPackageName)
+                result
+            }
+            module.log(Log.INFO, TAG, "hooked onBiometricAuthenticated on ${authControllerClass.name}")
+        } else {
+            module.log(Log.WARN, TAG, "onBiometricAuthenticated not found on ${authControllerClass.name}")
+        }
+
+        // Also hook onBiometricError to restore visibility if hidden
+        val errorMethod =
+            authControllerClass.declaredMethods.firstOrNull {
+                it.name == "onBiometricError" && it.parameterCount >= 1
+            }
+        if (errorMethod != null) {
+            errorMethod.isAccessible = true
+            module.hook(errorMethod).intercept { chain ->
+                val result = chain.proceed()
+                val currentDialog =
+                    (currentDialogField?.get(chain.thisObject) as? View)
+                        ?: activeContainerView?.get()
+                if (currentDialog != null && currentDialog.alpha < 1f) {
+                    currentDialog.post { currentDialog.alpha = 1f }
+                }
+                result
+            }
+        }
+    }
+
+    private fun triggerFaceConfirm(
+        authContainerView: View,
+        opPackageName: String,
+    ) {
+        if (confirmedViews.contains(authContainerView)) {
+            return
+        }
+        confirmedViews.add(authContainerView)
+
+        val context = authContainerView.context
+        if (confirmButtonId == 0) {
+            @SuppressLint("DiscouragedApi")
+            val id = context.resources.getIdentifier(BUTTON_CONFIRM_ID, "id", context.packageName)
+            confirmButtonId = id
+        }
+        val buttonId = confirmButtonId
+
+        if (buttonId == 0) {
+            module.log(Log.WARN, TAG, "confirm button missing id pkg=$opPackageName")
+            return
+        }
+
+        val startUptimeMs = SystemClock.uptimeMillis()
+        if (clickConfirm(authContainerView, buttonId, opPackageName, startUptimeMs)) {
+            return
+        }
+
+        retryUntilShown(authContainerView, buttonId, opPackageName, startUptimeMs)
     }
 
     private fun Class<*>.zeroArgMethodByBaseName(base: String): Method? {
@@ -102,11 +243,22 @@ object BiometricBypassHook {
         return field?.apply { isAccessible = true }
     }
 
-    private fun readOpPackageName(authContainerView: View): String =
+    private fun readOpPackageName(authContainerView: View): String {
+        // Try getOpPackageName()
         runCatching {
+            val m =
+                authContainerView.javaClass.methods.firstOrNull {
+                    it.name == "getOpPackageName" && it.parameterCount == 0
+                }
+            (m?.invoke(authContainerView) as? String)?.takeIf { it.isNotBlank() }
+        }.getOrNull()?.let { return it }
+
+        // Fallback to mConfig.mOpPackageName
+        return runCatching {
             val config = configField?.get(authContainerView) ?: return@runCatching null
             opPackageNameField?.get(config) as? String
         }.getOrNull() ?: "unknown"
+    }
 
     private fun clickConfirm(
         parentView: View,
@@ -118,7 +270,7 @@ object BiometricBypassHook {
         if (button == null || !button.isShown) return false
         button.performClick()
         val latencyMs = SystemClock.uptimeMillis() - startUptimeMs
-        module.log(Log.INFO, TAG, "confirm clicked pkg=$opPackageName latencyMs=$latencyMs")
+        module.log(Log.INFO, TAG, "face confirm clicked pkg=$opPackageName latencyMs=$latencyMs")
         return true
     }
 
@@ -133,8 +285,8 @@ object BiometricBypassHook {
                 return@postOnAnimation
             }
             val elapsedMs = SystemClock.uptimeMillis() - startUptimeMs
-            if (elapsedMs >= MAX_WAIT_MS) {
-                module.log(Log.WARN, TAG, "button not found pkg=$opPackageName waitMs=$elapsedMs")
+            if (elapsedMs >= EVENT_MAX_WAIT_MS) {
+                module.log(Log.WARN, TAG, "face confirm button not found pkg=$opPackageName waitMs=$elapsedMs")
                 return@postOnAnimation
             }
             retryUntilShown(parentView, buttonId, opPackageName, startUptimeMs)
