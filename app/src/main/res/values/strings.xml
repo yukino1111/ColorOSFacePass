@@ -1,4 +1,20 @@
 <resources>
     <string name="app_name">Biometric Bypass</string>
-    <string name="app_desc">Skips biometric confirmation after face unlock across all apps on Android 10+ devices</string>
+    <string name="app_desc">ColorOS 人脸弱生物识别提权与自动确认二合一模块</string>
+    <string name="search_hint">搜索应用名或包名...</string>
+    <string name="mode_whitelist">白名单模式</string>
+    <string name="mode_blacklist">黑名单模式</string>
+    <string name="filter_all">全部</string>
+    <string name="filter_user">用户应用</string>
+    <string name="filter_system">系统应用</string>
+    <string name="system_tag">系统</string>
+    <string name="select_all">全选</string>
+    <string name="deselect_all">全不选</string>
+    <string name="action_hide_dialog">隐藏确认弹窗</string>
+    <string name="action_import">导入规则</string>
+    <string name="action_export">导出规则</string>
+    <string name="selected_count_format">已选择 %1$d / %2$d 个应用</string>
+    <string name="export_success">配置已导出并复制到剪贴板</string>
+    <string name="import_success">配置导入成功</string>
+    <string name="import_failed">配置导入失败，请检查 JSON 格式</string>
 </resources>

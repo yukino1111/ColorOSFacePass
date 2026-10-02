@@ -1,6 +1,8 @@
 package eu.rafareborn.biometricbypass.hook
 
+import android.content.Context
 import android.util.Log
+import eu.rafareborn.biometricbypass.data.ConfigClient
 import eu.rafareborn.biometricbypass.module
 import java.lang.reflect.Method
 
@@ -100,7 +102,20 @@ object ColorOSFaceFixHook {
         }
     }
 
+    private fun getOrFindSystemContext(): Context? {
+        return runCatching {
+            val atClass = Class.forName("android.app.ActivityThread")
+            val currentAt = atClass.getDeclaredMethod("currentActivityThread").invoke(null)
+            atClass.getDeclaredMethod("getSystemContext").invoke(currentAt) as? Context
+        }.getOrNull()
+    }
+
     private fun isPackageAllowed(packageName: String): Boolean {
+        val context = getOrFindSystemContext()
+        if (context != null) {
+            return ConfigClient.isAllowed(context, packageName)
+        }
+
         val prefs = runCatching { module.getRemotePreferences("config") }.getOrNull()
             ?: return true
 

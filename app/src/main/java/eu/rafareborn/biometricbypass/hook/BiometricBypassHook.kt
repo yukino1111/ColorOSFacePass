@@ -6,6 +6,7 @@ import android.util.Log
 import android.view.View
 import android.widget.Button
 import eu.rafareborn.biometricbypass.TAG
+import eu.rafareborn.biometricbypass.data.ConfigClient
 import eu.rafareborn.biometricbypass.module
 import java.lang.reflect.Field
 import java.lang.reflect.Method
@@ -51,17 +52,25 @@ object BiometricBypassHook {
             chain.proceed()
 
             val authContainerView = chain.thisObject as? View ?: return@intercept null
+            val context = authContainerView.context
+            val opPackageName = readOpPackageName(authContainerView)
+
+            if (!ConfigClient.isAllowed(context, opPackageName)) {
+                module.log(Log.INFO, TAG, "skipped confirm by rule for pkg=$opPackageName")
+                return@intercept null
+            }
+
+            if (ConfigClient.isHideDialog(context)) {
+                authContainerView.alpha = 0f
+            }
 
             if (confirmButtonId == 0) {
-                val context = authContainerView.context
-
                 @SuppressLint("DiscouragedApi")
                 val id =
                     context.resources.getIdentifier(BUTTON_CONFIRM_ID, "id", context.packageName)
                 confirmButtonId = id
             }
             val buttonId = confirmButtonId
-            val opPackageName = readOpPackageName(authContainerView)
 
             if (buttonId == 0) {
                 module.log(Log.WARN, TAG, "button missing id pkg=$opPackageName")
