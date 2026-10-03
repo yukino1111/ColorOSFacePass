@@ -21,11 +21,13 @@ class BiometricBypassModule : XposedModule() {
         module = this
         processName = param.processName
         log(Log.INFO, TAG, "loaded version=${BuildConfig.VERSION_NAME} proc=$processName")
+        eu.rafareborn.biometricbypass.data.ConfigClient.refresh(null)
     }
 
     override fun onSystemServerStarting(param: SystemServerStartingParam) {
         module = this
         log(Log.INFO, TAG, "hooking biometrics in system_server (ColorOS Face Fix)...")
+        eu.rafareborn.biometricbypass.data.ConfigClient.refresh(null)
         try {
             ColorOSFaceFixHook.hook(param.classLoader)
         } catch (e: Throwable) {

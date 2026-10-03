@@ -112,24 +112,6 @@ object ColorOSFaceFixHook {
 
     private fun isPackageAllowed(packageName: String): Boolean {
         val context = getOrFindSystemContext()
-        if (context != null) {
-            return ConfigClient.isAllowed(context, packageName)
-        }
-
-        val prefs = runCatching { module.getRemotePreferences("config") }.getOrNull()
-            ?: return true
-
-        val mode = prefs.getString("mode", "whitelist") ?: "whitelist"
-        val packages = prefs.getStringSet("packages", emptySet()) ?: emptySet()
-
-        return when (mode) {
-            "whitelist" -> {
-                if (!prefs.contains("packages")) true else packageName in packages
-            }
-            "blacklist" -> {
-                packageName !in packages
-            }
-            else -> true
-        }
+        return ConfigClient.isAllowed(context, packageName)
     }
 }

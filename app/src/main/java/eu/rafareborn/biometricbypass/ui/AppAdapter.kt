@@ -26,18 +26,18 @@ class AppAdapter(
     private var displayedApps: List<AppInfo> = emptyList()
 
     private var currentQuery: String = ""
-    private var currentFilter: Int = FILTER_USER
+    private var currentFilter: Int = FILTER_ALL
 
     @SuppressLint("NotifyDataSetChanged")
     fun submitList(apps: List<AppInfo>) {
         allApps = apps
-        applyFilter()
+        applyFilter(resort = false)
     }
 
     fun setFilter(filter: Int) {
         if (currentFilter != filter) {
             currentFilter = filter
-            applyFilter()
+            applyFilter(resort = true)
         }
     }
 
@@ -45,7 +45,7 @@ class AppAdapter(
         val trimmed = query.trim()
         if (currentQuery != trimmed) {
             currentQuery = trimmed
-            applyFilter()
+            applyFilter(resort = false)
         }
     }
 
@@ -57,9 +57,9 @@ class AppAdapter(
     }
 
     @SuppressLint("NotifyDataSetChanged")
-    private fun applyFilter() {
+    private fun applyFilter(resort: Boolean = false) {
         val queryLower = currentQuery.lowercase()
-        displayedApps = allApps.filter { app ->
+        val filtered = allApps.filter { app ->
             val matchesCategory = when (currentFilter) {
                 FILTER_USER -> !app.isSystem
                 FILTER_SYSTEM -> app.isSystem
@@ -73,10 +73,20 @@ class AppAdapter(
             }
             matchesCategory && matchesQuery
         }
+        displayedApps = if (resort) {
+            filtered.sortedWith(
+                compareByDescending<AppInfo> { it.isSelected }
+                    .thenBy { it.isSystem }
+                    .thenBy { it.appName.lowercase() }
+            )
+        } else {
+            filtered
+        }
         notifyDataSetChanged()
     }
 
     fun getDisplayedCount(): Int = displayedApps.size
+    fun getDisplayedSelectedCount(): Int = displayedApps.count { it.isSelected }
     fun getTotalSelectedCount(): Int = allApps.count { it.isSelected }
     fun getTotalCount(): Int = allApps.size
     fun getAllApps(): List<AppInfo> = allApps

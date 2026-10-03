@@ -92,7 +92,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    app:checkedChip="@+id/chip_user"
+                    app:checkedChip="@+id/chip_all"
                     app:selectionRequired="true"
                     app:singleSelection="true">
 

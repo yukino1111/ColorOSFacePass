@@ -85,12 +85,13 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Set initial filter chip
-        chipGroupFilter.check(R.id.chip_user)
+        chipGroupFilter.check(R.id.chip_all)
     }
 
     private fun setupListeners() {
         etSearch.addTextChangedListener { text ->
             adapter.setQuery(text?.toString() ?: "")
+            updateCountText()
             checkEmptyState()
         }
 
@@ -105,9 +106,11 @@ class MainActivity : AppCompatActivity() {
             val filter = when (checkedIds.firstOrNull()) {
                 R.id.chip_user -> AppAdapter.FILTER_USER
                 R.id.chip_system -> AppAdapter.FILTER_SYSTEM
+                R.id.chip_all -> AppAdapter.FILTER_ALL
                 else -> AppAdapter.FILTER_ALL
             }
             adapter.setFilter(filter)
+            updateCountText()
             checkEmptyState()
         }
     }
@@ -183,8 +186,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateCountText() {
-        val selected = adapter.getTotalSelectedCount()
-        val total = adapter.getTotalCount()
+        val selected = adapter.getDisplayedSelectedCount()
+        val total = adapter.getDisplayedCount()
         tvCount.text = getString(R.string.selected_count_format, selected, total)
     }
 
