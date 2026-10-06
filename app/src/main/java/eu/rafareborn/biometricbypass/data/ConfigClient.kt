@@ -15,15 +15,14 @@ object ConfigClient {
     private var lastFetchTime = 0L
 
     @Volatile
+    private var hasLoadedValidConfig = false
+
+    @Volatile
     var cachedMode = "whitelist"
         private set
 
     @Volatile
     var cachedPackages: Set<String> = emptySet()
-        private set
-
-    @Volatile
-    var cachedHideDialog = false
         private set
 
     fun refresh(context: Context? = null) {
@@ -39,14 +38,14 @@ object ConfigClient {
             runCatching {
                 val uri = Uri.parse(URI_STRING)
                 val bundle = context.contentResolver.call(uri, "getConfig", null, null)
-                if (bundle != null) {
+                if (bundle != null && (bundle.containsKey("packages") || bundle.containsKey("mode"))) {
                     cachedMode = bundle.getString("mode", "whitelist") ?: "whitelist"
                     cachedPackages = bundle.getStringArrayList("packages")?.toSet() ?: emptySet()
-                    cachedHideDialog = bundle.getBoolean("hide_dialog", false)
                     lastFetchTime = now
+                    hasLoadedValidConfig = true
                     fetched = true
                     runCatching {
-                        module.log(Log.INFO, TAG, "ConfigClient refreshed via ContentProvider: mode=$cachedMode, count=${cachedPackages.size}, hideDialog=$cachedHideDialog")
+                        module.log(Log.INFO, TAG, "ConfigClient refreshed via ContentProvider: mode=$cachedMode, count=${cachedPackages.size}")
                     }
                 }
             }.onFailure {
@@ -60,13 +59,19 @@ object ConfigClient {
         if (!fetched) {
             runCatching {
                 val prefs = module.getRemotePreferences("config")
-                cachedMode = prefs.getString("mode", "whitelist") ?: "whitelist"
-                cachedPackages = prefs.getStringSet("packages", emptySet()) ?: emptySet()
-                cachedHideDialog = prefs.getBoolean("hide_dialog", false)
-                lastFetchTime = now
-                fetched = true
-                runCatching {
-                    module.log(Log.INFO, TAG, "ConfigClient refreshed via remotePrefs: mode=$cachedMode, count=${cachedPackages.size}, pkgs=$cachedPackages, hideDialog=$cachedHideDialog")
+                if (prefs.contains("packages") || prefs.contains("mode")) {
+                    cachedMode = prefs.getString("mode", "whitelist") ?: "whitelist"
+                    cachedPackages = prefs.getStringSet("packages", emptySet()) ?: emptySet()
+                    lastFetchTime = now
+                    hasLoadedValidConfig = true
+                    fetched = true
+                    runCatching {
+                        module.log(Log.INFO, TAG, "ConfigClient refreshed via remotePrefs: mode=$cachedMode, count=${cachedPackages.size}, pkgs=$cachedPackages")
+                    }
+                } else {
+                    runCatching {
+                        module.log(Log.WARN, TAG, "ConfigClient remotePrefs returned uninitialized prefs, keeping current cache")
+                    }
                 }
             }.onFailure {
                 runCatching {
@@ -78,6 +83,15 @@ object ConfigClient {
 
     fun isAllowed(context: Context?, packageName: String): Boolean {
         refresh(context)
+        // If configuration has never been loaded yet (e.g. immediately upon system boot before IPC settles),
+        // fail-safe to allowed=true so ColorOSFaceFixHook does not block face recognition.
+        if (!hasLoadedValidConfig && cachedPackages.isEmpty()) {
+            runCatching {
+                module.log(Log.INFO, TAG, "isAllowed pkg=$packageName fallback safe allow (no valid config loaded yet)")
+            }
+            return true
+        }
+
         val inList = cachedPackages.contains(packageName)
         val allowed = when (cachedMode) {
             "whitelist" -> inList
@@ -88,10 +102,5 @@ object ConfigClient {
             module.log(Log.INFO, TAG, "isAllowed pkg=$packageName mode=$cachedMode inList=$inList -> $allowed")
         }
         return allowed
-    }
-
-    fun isHideDialog(context: Context?): Boolean {
-        refresh(context)
-        return cachedHideDialog
     }
 }

@@ -13,7 +13,6 @@ class ConfigProvider : ContentProvider() {
         const val METHOD_GET_CONFIG = "getConfig"
         const val KEY_MODE = "mode"
         const val KEY_PACKAGES = "packages"
-        const val KEY_HIDE_DIALOG = "hide_dialog"
     }
 
     override fun onCreate(): Boolean = true
@@ -23,11 +22,9 @@ class ConfigProvider : ContentProvider() {
             val ctx = context ?: return null
             val mode = ConfigManager.getMode(ctx)
             val packages = ArrayList(ConfigManager.getPackages(ctx))
-            val hideDialog = ConfigManager.isHideDialog(ctx)
             return Bundle().apply {
                 putString(KEY_MODE, mode)
                 putStringArrayList(KEY_PACKAGES, packages)
-                putBoolean(KEY_HIDE_DIALOG, hideDialog)
             }
         }
         return null

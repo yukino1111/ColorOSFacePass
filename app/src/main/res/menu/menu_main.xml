@@ -10,11 +10,6 @@
         android:title="@string/deselect_all"
         app:showAsAction="never" />
     <item
-        android:id="@+id/action_hide_dialog"
-        android:title="@string/action_hide_dialog"
-        android:checkable="true"
-        app:showAsAction="never" />
-    <item
         android:id="@+id/action_import"
         android:title="@string/action_import"
         app:showAsAction="never" />

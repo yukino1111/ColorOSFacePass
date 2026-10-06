@@ -42,14 +42,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvEmpty: TextView
 
     private lateinit var adapter: AppAdapter
-    private var isHideDialog = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         ConfigManager.init(this)
-        isHideDialog = ConfigManager.isHideDialog(this)
 
         initViews()
         setupListeners()
@@ -182,7 +180,7 @@ class MainActivity : AppCompatActivity() {
             .map { it.packageName }
             .toSet()
 
-        ConfigManager.saveConfig(this, mode, selectedPackages, isHideDialog)
+        ConfigManager.saveConfig(this, mode, selectedPackages)
     }
 
     private fun updateCountText() {
@@ -193,8 +191,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.menu_main, menu)
-        val hideDialogItem = menu.findItem(R.id.action_hide_dialog)
-        hideDialogItem?.isChecked = isHideDialog
         return true
     }
 
@@ -210,14 +206,6 @@ class MainActivity : AppCompatActivity() {
                 adapter.selectAllDisplayed(false)
                 saveCurrentSelection()
                 updateCountText()
-                true
-            }
-            R.id.action_hide_dialog -> {
-                isHideDialog = !item.isChecked
-                item.isChecked = isHideDialog
-                saveCurrentSelection()
-                val stateText = if (isHideDialog) "已开启：自动隐藏确认弹窗（完全无感）" else "已关闭：保持系统原生弹窗"
-                Toast.makeText(this, stateText, Toast.LENGTH_SHORT).show()
                 true
             }
             R.id.action_export -> {
@@ -261,8 +249,6 @@ class MainActivity : AppCompatActivity() {
                 val text = editText.text.toString().trim()
                 if (ConfigManager.importFromJson(this, text)) {
                     Toast.makeText(this, R.string.import_success, Toast.LENGTH_SHORT).show()
-                    isHideDialog = ConfigManager.isHideDialog(this)
-                    invalidateOptionsMenu()
                     val mode = ConfigManager.getMode(this)
                     if (mode == ConfigManager.MODE_BLACKLIST) {
                         toggleMode.check(R.id.btn_blacklist)

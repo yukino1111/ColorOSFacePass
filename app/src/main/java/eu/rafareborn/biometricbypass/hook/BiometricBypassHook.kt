@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.os.SystemClock
 import android.util.Log
 import android.view.View
-import android.widget.Button
 import eu.rafareborn.biometricbypass.TAG
 import eu.rafareborn.biometricbypass.data.ConfigClient
 import eu.rafareborn.biometricbypass.module
@@ -29,12 +28,16 @@ object BiometricBypassHook {
     private const val BUTTON_CONFIRM_ID = "button_confirm"
 
     private const val EVENT_MAX_WAIT_MS = 1_000L
+    private const val DEFERRED_FALLBACK_TIMEOUT_MS = 600L
 
     private var configField: Field? = null
     private var opPackageNameField: Field? = null
     private var currentDialogField: Field? = null
+    private var containerStateField: Field? = null
 
     private var activeContainerView: WeakReference<View>? = null
+    private val animatedInViews = Collections.newSetFromMap(WeakHashMap<View, Boolean>())
+    private val pendingConfirmViews = Collections.synchronizedMap(WeakHashMap<View, String>())
     private val confirmedViews = Collections.newSetFromMap(WeakHashMap<View, Boolean>())
 
     @Volatile
@@ -56,42 +59,37 @@ object BiometricBypassHook {
 
         configField = targetClass.fieldByBaseName(CONFIG_FIELD)
         opPackageNameField = configField?.type?.fieldByBaseName(OP_PACKAGE_FIELD)
+        containerStateField = targetClass.fieldByBaseName("mContainerState")
 
-        // 1. Hook onDialogAnimatedIn for tracking & optional transparent dialog hiding
+        // 1. Hook onDialogAnimatedIn for tracking & executing deferred confirmations
         val animInMethod = targetClass.zeroArgMethodByBaseName(TARGET_METHOD_ANIMATED_IN)
         if (animInMethod != null) {
             module.hook(animInMethod).intercept { chain ->
-                chain.proceed()
+                val result = chain.proceed()
 
-                val authContainerView = chain.thisObject as? View ?: return@intercept null
+                val authContainerView = chain.thisObject as? View ?: return@intercept result
                 activeContainerView = WeakReference(authContainerView)
+                animatedInViews.add(authContainerView)
 
-                val context = authContainerView.context
-                val opPackageName = readOpPackageName(authContainerView)
-
-                if (ConfigClient.isAllowed(context, opPackageName) && ConfigClient.isHideDialog(context)) {
-                    authContainerView.alpha = 0f
+                // If face was recognized before the dialog finished animating in, execute deferred confirm now
+                val pendingPkg = pendingConfirmViews.remove(authContainerView)
+                if (pendingPkg != null) {
+                    module.log(
+                        Log.INFO,
+                        TAG,
+                        "dialog animated in, executing deferred face confirm pkg=$pendingPkg",
+                    )
+                    authContainerView.post {
+                        triggerFaceConfirm(authContainerView, pendingPkg)
+                    }
                 }
-                null
+
+                result
             }
             module.log(Log.INFO, TAG, "hooked animated-in on ${targetClass.name}#${animInMethod.name}")
         }
 
-        // 2. Hook onAuthenticationFailed to restore dialog visibility if it was hidden
-        val failMethods = targetClass.declaredMethods.filter { it.name.startsWith("onAuthenticationFailed") }
-        for (failMethod in failMethods) {
-            failMethod.isAccessible = true
-            module.hook(failMethod).intercept { chain ->
-                val result = chain.proceed()
-                val authContainerView = chain.thisObject as? View
-                if (authContainerView != null && authContainerView.alpha < 1f) {
-                    authContainerView.post { authContainerView.alpha = 1f }
-                }
-                result
-            }
-        }
-
-        // 3. Fallback for older Android (10-14): hook onAuthenticationSucceeded(int modality) directly on AuthContainerView if present
+        // 2. Fallback for older Android (10-14): hook onAuthenticationSucceeded(int modality) directly on AuthContainerView if present
         val authSucceedMethod =
             targetClass.declaredMethods.firstOrNull {
                 it.name == "onAuthenticationSucceeded" &&
@@ -118,7 +116,7 @@ object BiometricBypassHook {
                     return@intercept result
                 }
 
-                triggerFaceConfirm(authContainerView, opPackageName)
+                scheduleFaceConfirm(authContainerView, opPackageName)
                 result
             }
             module.log(Log.INFO, TAG, "hooked onAuthenticationSucceeded fallback on ${targetClass.name}")
@@ -171,33 +169,55 @@ object BiometricBypassHook {
                     return@intercept result
                 }
 
-                // 事件驱动：人脸识别成功事件触发后，立即完成确认
-                triggerFaceConfirm(currentDialog, opPackageName)
+                // 调度人脸确认：若入场动画尚未完成，则延迟至入场后确认，避免底层触发 USER_CANCELED 状态竞态
+                scheduleFaceConfirm(currentDialog, opPackageName)
                 result
             }
             module.log(Log.INFO, TAG, "hooked onBiometricAuthenticated on ${authControllerClass.name}")
         } else {
             module.log(Log.WARN, TAG, "onBiometricAuthenticated not found on ${authControllerClass.name}")
         }
+    }
 
-        // Also hook onBiometricError to restore visibility if hidden
-        val errorMethod =
-            authControllerClass.declaredMethods.firstOrNull {
-                it.name == "onBiometricError" && it.parameterCount >= 1
-            }
-        if (errorMethod != null) {
-            errorMethod.isAccessible = true
-            module.hook(errorMethod).intercept { chain ->
-                val result = chain.proceed()
-                val currentDialog =
-                    (currentDialogField?.get(chain.thisObject) as? View)
-                        ?: activeContainerView?.get()
-                if (currentDialog != null && currentDialog.alpha < 1f) {
-                    currentDialog.post { currentDialog.alpha = 1f }
-                }
-                result
-            }
+    private fun scheduleFaceConfirm(
+        authContainerView: View,
+        opPackageName: String,
+    ) {
+        if (confirmedViews.contains(authContainerView)) {
+            return
         }
+
+        val isAnimatedIn = animatedInViews.contains(authContainerView) || isContainerStateReady(authContainerView)
+        if (isAnimatedIn) {
+            module.log(Log.INFO, TAG, "face authenticated after dialog ready, confirming pkg=$opPackageName")
+            authContainerView.post {
+                triggerFaceConfirm(authContainerView, opPackageName)
+            }
+        } else {
+            module.log(
+                Log.INFO,
+                TAG,
+                "face authenticated before dialog animated in, deferring confirm pkg=$opPackageName",
+            )
+            pendingConfirmViews[authContainerView] = opPackageName
+
+            // Fallback timeout to prevent permanent hang if onDialogAnimatedIn is skipped on certain vendor ROMs
+            authContainerView.postDelayed({
+                val pendingPkg = pendingConfirmViews.remove(authContainerView)
+                if (pendingPkg != null && !confirmedViews.contains(authContainerView)) {
+                    module.log(Log.WARN, TAG, "fallback confirm triggered after timeout for pkg=$pendingPkg")
+                    triggerFaceConfirm(authContainerView, pendingPkg)
+                }
+            }, DEFERRED_FALLBACK_TIMEOUT_MS)
+        }
+    }
+
+    private fun isContainerStateReady(authContainerView: View): Boolean {
+        return runCatching {
+            val state = containerStateField?.getInt(authContainerView) ?: return@runCatching false
+            // STATE_ANIMATING_IN is typically 1; states >= 3 represent fully shown/ready states
+            state >= 3
+        }.getOrDefault(false)
     }
 
     private fun triggerFaceConfirm(
@@ -266,8 +286,8 @@ object BiometricBypassHook {
         opPackageName: String,
         startUptimeMs: Long,
     ): Boolean {
-        val button = parentView.findViewById<Button?>(buttonId)
-        if (button == null || !button.isShown) return false
+        val button = parentView.findViewById<View?>(buttonId)
+        if (button == null || !button.isShown || !button.isEnabled) return false
         button.performClick()
         val latencyMs = SystemClock.uptimeMillis() - startUptimeMs
         module.log(Log.INFO, TAG, "face confirm clicked pkg=$opPackageName latencyMs=$latencyMs")

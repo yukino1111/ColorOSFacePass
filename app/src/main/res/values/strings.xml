@@ -10,7 +10,6 @@
     <string name="system_tag">系统</string>
     <string name="select_all">全选</string>
     <string name="deselect_all">全不选</string>
-    <string name="action_hide_dialog">隐藏确认弹窗</string>
     <string name="action_import">导入规则</string>
     <string name="action_export">导出规则</string>
     <string name="selected_count_format">已选择 %1$d / %2$d 个应用</string>

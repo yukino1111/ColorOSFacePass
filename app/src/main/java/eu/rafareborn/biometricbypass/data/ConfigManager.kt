@@ -12,7 +12,6 @@ object ConfigManager {
     const val PREFS_NAME = "config"
     const val KEY_MODE = "mode"
     const val KEY_PACKAGES = "packages"
-    const val KEY_HIDE_DIALOG = "hide_dialog"
 
     const val MODE_WHITELIST = "whitelist"
     const val MODE_BLACKLIST = "blacklist"
@@ -52,20 +51,15 @@ object ConfigManager {
     fun getPackages(context: Context): Set<String> =
         getLocalPrefs(context).getStringSet(KEY_PACKAGES, emptySet()) ?: emptySet()
 
-    fun isHideDialog(context: Context): Boolean =
-        getLocalPrefs(context).getBoolean(KEY_HIDE_DIALOG, false)
-
     fun saveConfig(
         context: Context,
         mode: String,
         packages: Set<String>,
-        hideDialog: Boolean,
     ) {
         val localPrefs = getLocalPrefs(context)
         localPrefs.edit()
             .putString(KEY_MODE, mode)
             .putStringSet(KEY_PACKAGES, packages)
-            .putBoolean(KEY_HIDE_DIALOG, hideDialog)
             .apply()
 
         // Also write to Xposed remote preferences
@@ -75,7 +69,6 @@ object ConfigManager {
                 remotePrefs.edit()
                     .putString(KEY_MODE, mode)
                     .putStringSet(KEY_PACKAGES, packages)
-                    .putBoolean(KEY_HIDE_DIALOG, hideDialog)
                     .commit()
             }
         }.onFailure {
@@ -86,14 +79,12 @@ object ConfigManager {
     private fun syncToRemote(context: Context) {
         val mode = getMode(context)
         val packages = getPackages(context)
-        val hideDialog = isHideDialog(context)
         runCatching {
             xposedService?.let { service ->
                 val remotePrefs = service.getRemotePreferences(PREFS_NAME)
                 remotePrefs.edit()
                     .putString(KEY_MODE, mode)
                     .putStringSet(KEY_PACKAGES, packages)
-                    .putBoolean(KEY_HIDE_DIALOG, hideDialog)
                     .commit()
             }
         }
@@ -102,7 +93,6 @@ object ConfigManager {
     fun exportToJson(context: Context): String {
         val root = JSONObject()
         root.put(KEY_MODE, getMode(context))
-        root.put(KEY_HIDE_DIALOG, isHideDialog(context))
         val array = JSONArray()
         getPackages(context).forEach { array.put(it) }
         root.put(KEY_PACKAGES, array)
@@ -113,13 +103,12 @@ object ConfigManager {
         return runCatching {
             val root = JSONObject(jsonStr)
             val mode = root.optString(KEY_MODE, MODE_WHITELIST)
-            val hideDialog = root.optBoolean(KEY_HIDE_DIALOG, false)
             val jsonArray = root.optJSONArray(KEY_PACKAGES) ?: JSONArray()
             val packages = mutableSetOf<String>()
             for (i in 0 until jsonArray.length()) {
                 packages.add(jsonArray.getString(i))
             }
-            saveConfig(context, mode, packages, hideDialog)
+            saveConfig(context, mode, packages)
             true
         }.getOrDefault(false)
     }
