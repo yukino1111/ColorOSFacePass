@@ -24,6 +24,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "BiometricBypass"
+rootProject.name = "ColorOSFacePass"
 
 include(":app")

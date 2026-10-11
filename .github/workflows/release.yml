@@ -25,9 +25,6 @@ jobs:
           java-version: '21'
           cache: 'gradle'
 
-      - name: Build libxposed to mavenLocal
-        run: ./gradlew buildLibxposed
-
       - name: Decode keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE }}
