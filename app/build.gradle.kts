@@ -1,20 +1,22 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.agp.app)
     alias(libs.plugins.ktlint)
 }
 
 android {
-    namespace = "eu.rafareborn.biometricbypass"
+    namespace = "io.github.yukino1111.colorosfacepass"
     compileSdk = 36
     buildToolsVersion = "36.0.0"
 
     defaultConfig {
-        applicationId = "eu.rafareborn.biometricbypass"
+        applicationId = "io.github.yukino1111.colorosfacepass"
         minSdk = 29
         targetSdk = 36
 
-        versionCode = 205
-        versionName = "1.0.3"
+        versionCode = 1
+        versionName = "1.0.0"
     }
 
     androidResources {
@@ -22,31 +24,50 @@ android {
         localeFilters.add("en")
     }
 
+    val keystorePropertiesFile = rootProject.file("keystore.properties")
+    val keystoreProperties =
+        Properties().apply {
+            if (keystorePropertiesFile.exists()) {
+                keystorePropertiesFile.inputStream().use { load(it) }
+            }
+        }
+
     signingConfigs {
         create("release") {
             fun secret(name: String): String? =
-                providers
-                    .gradleProperty(name)
-                    .orElse(providers.environmentVariable(name))
-                    .orNull
+                keystoreProperties.getProperty(name)
+                    ?: providers
+                        .gradleProperty(name)
+                        .orElse(providers.environmentVariable(name))
+                        .orNull
 
-            val storeFilePath = secret("RELEASE_STORE_FILE")
-            val storePassword = secret("RELEASE_STORE_PASSWORD")
-            val keyAlias = secret("RELEASE_KEY_ALIAS")
-            val keyPassword = secret("RELEASE_KEY_PASSWORD")
-            val storeType = secret("RELEASE_STORE_TYPE") ?: "PKCS12"
+            val storeFilePath = secret("storeFile") ?: secret("RELEASE_STORE_FILE")
+            val storePassword = secret("storePassword") ?: secret("RELEASE_STORE_PASSWORD")
+            val keyAlias = secret("keyAlias") ?: secret("RELEASE_KEY_ALIAS")
+            val keyPassword = secret("keyPassword") ?: secret("RELEASE_KEY_PASSWORD") ?: storePassword
+            val storeType = secret("storeType") ?: secret("RELEASE_STORE_TYPE")
 
-            if (!storeFilePath.isNullOrBlank()) {
-                storeFile = file(storeFilePath)
+            val releaseStoreFile =
+                storeFilePath?.let {
+                    rootProject.file(it).takeIf { f -> f.exists() }
+                        ?: file(it).takeIf { f -> f.exists() }
+                }
+
+            if (releaseStoreFile != null && !storePassword.isNullOrBlank() && !keyAlias.isNullOrBlank()) {
+                storeFile = releaseStoreFile
                 this.storePassword = storePassword
                 this.keyAlias = keyAlias
                 this.keyPassword = keyPassword
-                this.storeType = storeType
+                if (!storeType.isNullOrBlank()) {
+                    this.storeType = storeType
+                }
 
-                enableV1Signing = false
+                enableV1Signing = true
                 enableV2Signing = true
+            } else if (keystorePropertiesFile.exists()) {
+                println("Release keystore not found, assembleRelease will build an unsigned release artifact.")
             } else {
-                logger.warn("RELEASE_STORE_FILE not found. Release signing is disabled.")
+                logger.warn("Neither keystore.properties nor RELEASE_STORE_FILE found. Release signing is disabled.")
             }
         }
     }
@@ -59,7 +80,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfig = signingConfigs.getByName("release").takeIf { it.storeFile != null }
+            signingConfig = signingConfigs.getByName("release").takeIf { it.storeFile != null && it.storeFile!!.exists() }
         }
         debug {
             isMinifyEnabled = false
@@ -130,6 +151,17 @@ val ktlintSrc by tasks.registering(JavaExec::class) {
             dependencies.create("com.pinterest.ktlint:ktlint-cli:1.8.0"),
         )
     args("src/**/*.kt")
+}
+
+val ktlintFormatSrc by tasks.registering(JavaExec::class) {
+    group = "formatting"
+    description = "Fixes ktlint formatting on Kotlin source files"
+    mainClass.set("com.pinterest.ktlint.Main")
+    classpath =
+        configurations.detachedConfiguration(
+            dependencies.create("com.pinterest.ktlint:ktlint-cli:1.8.0"),
+        )
+    args("-F", "src/**/*.kt")
 }
 
 tasks.named("check").configure {

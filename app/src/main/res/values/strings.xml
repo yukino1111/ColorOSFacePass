@@ -1,6 +1,6 @@
 <resources>
-    <string name="app_name">Biometric Bypass</string>
-    <string name="app_desc">ColorOS 人脸弱生物识别提权与自动确认二合一模块</string>
+    <string name="app_name">ColorOSFacePass</string>
+    <string name="app_desc">ColorOS 人脸弱生物识别提权与自动确认（应用自选）</string>
     <string name="search_hint">搜索应用名或包名...</string>
     <string name="mode_whitelist">白名单模式</string>
     <string name="mode_blacklist">黑名单模式</string>

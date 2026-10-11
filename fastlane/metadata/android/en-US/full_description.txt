@@ -1,7 +1,0 @@
-<p>Xposed module that skips the "tap to confirm" dialog Android shows after face unlock. It taps confirm for you in System UI, so it works in all apps.</p>
-<p><b>Requirements</b></p>
-<ul>
-<li>Android 10 (API 29) or newer</li>
-<li>Xposed framework with libxposed API 101 (recent LSPosed)</li>
-<li>AOSP or close-to-stock ROM. OEM skins like MIUI or One UI may not work.</li>
-</ul>

@@ -1,0 +1,147 @@
+package io.github.yukino1111.colorosfacepass.ui
+
+import android.annotation.SuppressLint
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.ImageView
+import android.widget.TextView
+import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.card.MaterialCardView
+import com.google.android.material.checkbox.MaterialCheckBox
+import io.github.yukino1111.colorosfacepass.R
+import io.github.yukino1111.colorosfacepass.data.AppInfo
+
+class AppAdapter(
+    private val onSelectionChanged: () -> Unit,
+) : RecyclerView.Adapter<AppAdapter.ViewHolder>() {
+    companion object {
+        const val FILTER_ALL = 0
+        const val FILTER_USER = 1
+        const val FILTER_SYSTEM = 2
+    }
+
+    private var allApps: List<AppInfo> = emptyList()
+    private var displayedApps: List<AppInfo> = emptyList()
+
+    private var currentQuery: String = ""
+    private var currentFilter: Int = FILTER_ALL
+
+    @SuppressLint("NotifyDataSetChanged")
+    fun submitList(apps: List<AppInfo>) {
+        allApps = apps
+        applyFilter(resort = false)
+    }
+
+    fun setFilter(filter: Int) {
+        if (currentFilter != filter) {
+            currentFilter = filter
+            applyFilter(resort = true)
+        }
+    }
+
+    fun setQuery(query: String) {
+        val trimmed = query.trim()
+        if (currentQuery != trimmed) {
+            currentQuery = trimmed
+            applyFilter(resort = false)
+        }
+    }
+
+    @SuppressLint("NotifyDataSetChanged")
+    fun selectAllDisplayed(select: Boolean) {
+        displayedApps.forEach { it.isSelected = select }
+        notifyDataSetChanged()
+        onSelectionChanged()
+    }
+
+    @SuppressLint("NotifyDataSetChanged")
+    private fun applyFilter(resort: Boolean = false) {
+        val queryLower = currentQuery.lowercase()
+        val filtered =
+            allApps.filter { app ->
+                val matchesCategory =
+                    when (currentFilter) {
+                        FILTER_USER -> !app.isSystem
+                        FILTER_SYSTEM -> app.isSystem
+                        else -> true
+                    }
+                val matchesQuery =
+                    if (queryLower.isEmpty()) {
+                        true
+                    } else {
+                        app.appName.lowercase().contains(queryLower) ||
+                            app.packageName.lowercase().contains(queryLower)
+                    }
+                matchesCategory && matchesQuery
+            }
+        displayedApps =
+            if (resort) {
+                filtered.sortedWith(
+                    compareByDescending<AppInfo> { it.isSelected }
+                        .thenBy { it.isSystem }
+                        .thenBy { it.appName.lowercase() },
+                )
+            } else {
+                filtered
+            }
+        notifyDataSetChanged()
+    }
+
+    fun getDisplayedCount(): Int = displayedApps.size
+
+    fun getDisplayedSelectedCount(): Int = displayedApps.count { it.isSelected }
+
+    fun getTotalSelectedCount(): Int = allApps.count { it.isSelected }
+
+    fun getTotalCount(): Int = allApps.size
+
+    fun getAllApps(): List<AppInfo> = allApps
+
+    override fun onCreateViewHolder(
+        parent: ViewGroup,
+        viewType: Int,
+    ): ViewHolder {
+        val view = LayoutInflater.from(parent.context).inflate(R.layout.item_app, parent, false)
+        return ViewHolder(view)
+    }
+
+    override fun onBindViewHolder(
+        holder: ViewHolder,
+        position: Int,
+    ) {
+        holder.bind(displayedApps[position])
+    }
+
+    override fun getItemCount(): Int = displayedApps.size
+
+    inner class ViewHolder(
+        itemView: View,
+    ) : RecyclerView.ViewHolder(itemView) {
+        private val cardView: MaterialCardView = itemView.findViewById(R.id.card_view)
+        private val ivIcon: ImageView = itemView.findViewById(R.id.iv_icon)
+        private val tvName: TextView = itemView.findViewById(R.id.tv_name)
+        private val tvPackage: TextView = itemView.findViewById(R.id.tv_package)
+        private val tvSystemTag: TextView = itemView.findViewById(R.id.tv_system_tag)
+        private val cbSelected: MaterialCheckBox = itemView.findViewById(R.id.cb_selected)
+
+        fun bind(app: AppInfo) {
+            tvName.text = app.appName
+            tvPackage.text = app.packageName
+            tvSystemTag.visibility = if (app.isSystem) View.VISIBLE else View.GONE
+            cbSelected.isChecked = app.isSelected
+
+            if (app.icon != null) {
+                ivIcon.setImageDrawable(app.icon)
+            } else {
+                ivIcon.setImageResource(R.mipmap.ic_launcher)
+            }
+
+            cardView.setOnClickListener {
+                app.isSelected = !app.isSelected
+                cbSelected.isChecked = app.isSelected
+                onSelectionChanged()
+            }
+        }
+    }
+}

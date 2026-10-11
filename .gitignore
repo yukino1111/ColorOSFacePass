@@ -47,6 +47,7 @@ test-output/
 
 # Keystore files
 *.jks
+keystore.properties
 
 # Firebase Crashlytics
 crashlytics.properties
