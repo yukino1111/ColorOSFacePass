@@ -1,0 +1,75 @@
+# Gradle files
+.gradle/
+build/
+
+# Android Studio
+.idea/
+*.iml
+
+# Local configuration file (SDK path, etc.)
+local.properties
+
+# Log/OS Files
+.DS_Store
+*.log
+
+# NDK/CMake
+.cxx/
+.externalNativeBuild/
+
+# Output and generated files
+captures/
+outputs/
+
+# Unit test files
+test-output/
+
+# Android Studio specific
+.idea/
+*.iws
+*.ipr
+*.iml
+
+# Android Studio 3.1+ specific
+.idea/caches/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/codeStyles/
+.idea/libraries/
+.idea/shelf/
+.idea/gradle.xml
+.idea/sonarlint/
+.idea/vcs.xml
+.idea/runConfigurations.xml
+.idea/runConfigurations/
+.idea/misc.xml
+.idea/navEditor.xml
+
+# Keystore files
+*.jks
+keystore.properties
+
+# Firebase Crashlytics
+crashlytics.properties
+
+# Gradle Wrapper
+gradle-wrapper.jar
+gradle-wrapper.properties
+
+# Build folders
+build/
+app/build/
+gradle/
+
+# MacOS specific files
+.DS_Store
+
+# Temporary files
+*.tmp
+*.temp
+
+# Exception for libs.versions.toml
+!gradle/libs.versions.toml
+CLAUDE.md
+*.apk
+
