@@ -3,26 +3,37 @@ package io.github.yukino1111.colorosfacepass.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
-import android.widget.EditText
-import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
 import androidx.core.widget.addTextChangedListener
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
+import com.google.android.material.card.MaterialCardView
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.loadingindicator.LoadingIndicator
 import com.google.android.material.textfield.TextInputEditText
+import io.github.yukino1111.colorosfacepass.BuildConfig
 import io.github.yukino1111.colorosfacepass.R
 import io.github.yukino1111.colorosfacepass.data.AppInfo
 import io.github.yukino1111.colorosfacepass.data.ConfigManager
@@ -31,39 +42,46 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
+    private lateinit var appBar: AppBarLayout
     private lateinit var toolbar: MaterialToolbar
+    private lateinit var btnLanguage: MaterialButton
     private lateinit var etSearch: TextInputEditText
     private lateinit var toggleMode: MaterialButtonToggleGroup
     private lateinit var chipGroupFilter: ChipGroup
     private lateinit var tvCount: TextView
     private lateinit var rvApps: RecyclerView
-    private lateinit var progressBar: ProgressBar
-    private lateinit var tvEmpty: TextView
+    private lateinit var loadingIndicator: LoadingIndicator
+    private lateinit var llEmpty: View
 
     private lateinit var adapter: AppAdapter
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         ConfigManager.init(this)
 
         initViews()
+        applyEdgeToEdgeInsets()
         setupListeners()
         loadApps()
     }
 
     private fun initViews() {
+        appBar = findViewById(R.id.app_bar)
         toolbar = findViewById(R.id.toolbar)
         setSupportActionBar(toolbar)
+        supportActionBar?.setDisplayShowTitleEnabled(false)
 
+        btnLanguage = findViewById(R.id.btn_language)
         etSearch = findViewById(R.id.et_search)
         toggleMode = findViewById(R.id.toggle_mode)
         chipGroupFilter = findViewById(R.id.chip_group_filter)
         tvCount = findViewById(R.id.tv_count)
         rvApps = findViewById(R.id.rv_apps)
-        progressBar = findViewById(R.id.progress_bar)
-        tvEmpty = findViewById(R.id.tv_empty)
+        loadingIndicator = findViewById(R.id.progress_bar)
+        llEmpty = findViewById(R.id.ll_empty)
 
         adapter =
             AppAdapter {
@@ -86,14 +104,42 @@ class MainActivity : AppCompatActivity() {
         chipGroupFilter.check(R.id.chip_all)
     }
 
+    private fun applyEdgeToEdgeInsets() {
+        val baseAppBarLeft = appBar.paddingLeft
+        val baseAppBarTop = appBar.paddingTop
+        val baseAppBarRight = appBar.paddingRight
+        val baseListLeft = rvApps.paddingLeft
+        val baseListRight = rvApps.paddingRight
+        val baseListBottom = rvApps.paddingBottom
+
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.root_coordinator)) { _, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            appBar.updatePadding(
+                left = baseAppBarLeft + bars.left,
+                top = baseAppBarTop + bars.top,
+                right = baseAppBarRight + bars.right,
+            )
+            rvApps.updatePadding(
+                left = baseListLeft + bars.left,
+                right = baseListRight + bars.right,
+                bottom = baseListBottom + bars.bottom,
+            )
+            insets
+        }
+    }
+
     private fun setupListeners() {
+        btnLanguage.setOnClickListener {
+            toggleLanguage()
+        }
+
         etSearch.addTextChangedListener { text ->
             adapter.setQuery(text?.toString() ?: "")
             updateCountText()
             checkEmptyState()
         }
 
-        toggleMode.addOnButtonCheckedListener { _, checkedId, isChecked ->
+        toggleMode.addOnButtonCheckedListener { _, _, isChecked ->
             if (isChecked) {
                 saveCurrentSelection()
                 updateCountText()
@@ -115,8 +161,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadApps() {
-        progressBar.visibility = View.VISIBLE
+        loadingIndicator.visibility = View.VISIBLE
         rvApps.visibility = View.GONE
+        llEmpty.visibility = View.GONE
 
         lifecycleScope.launch(Dispatchers.IO) {
             val pm = packageManager
@@ -152,7 +199,7 @@ class MainActivity : AppCompatActivity() {
             )
 
             withContext(Dispatchers.Main) {
-                progressBar.visibility = View.GONE
+                loadingIndicator.visibility = View.GONE
                 rvApps.visibility = View.VISIBLE
                 adapter.submitList(appList)
                 updateCountText()
@@ -162,8 +209,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkEmptyState() {
-        tvEmpty.visibility =
-            if (adapter.getDisplayedCount() == 0 && progressBar.visibility != View.VISIBLE) {
+        llEmpty.visibility =
+            if (adapter.getDisplayedCount() == 0 && loadingIndicator.visibility != View.VISIBLE) {
                 View.VISIBLE
             } else {
                 View.GONE
@@ -192,6 +239,7 @@ class MainActivity : AppCompatActivity() {
         val selected = adapter.getDisplayedSelectedCount()
         val total = adapter.getDisplayedCount()
         tvCount.text = getString(R.string.selected_count_format, selected, total)
+        tvCount.visibility = View.VISIBLE
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -225,6 +273,11 @@ class MainActivity : AppCompatActivity() {
                 true
             }
 
+            R.id.action_about -> {
+                showAboutDialog()
+                true
+            }
+
             else -> {
                 super.onOptionsItemSelected(item)
             }
@@ -232,20 +285,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun exportConfig() {
         val json = ConfigManager.exportToJson(this)
-        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val clip = ClipData.newPlainText("BiometricBypass_Config", json)
-        clipboard.setPrimaryClip(clip)
+        copyToClipboard("BiometricBypass_Config", json)
         Toast.makeText(this, R.string.export_success, Toast.LENGTH_LONG).show()
     }
 
     private fun showImportDialog() {
-        val editText =
-            EditText(this).apply {
-                hint = "请在此粘贴导出的 JSON 配置字符串"
-                minLines = 4
-                maxLines = 8
-                setPadding(40, 30, 40, 30)
-            }
+        val dialogView = layoutInflater.inflate(R.layout.dialog_import, null)
+        val editText = dialogView.findViewById<TextInputEditText>(R.id.et_import)
 
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         val clipText =
@@ -259,9 +305,13 @@ class MainActivity : AppCompatActivity() {
 
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.action_import)
-            .setView(editText)
-            .setPositiveButton("导入") { _, _ ->
-                val text = editText.text.toString().trim()
+            .setView(dialogView)
+            .setPositiveButton(R.string.dialog_import_confirm) { _, _ ->
+                val text =
+                    editText.text
+                        ?.toString()
+                        ?.trim()
+                        .orEmpty()
                 if (ConfigManager.importFromJson(this, text)) {
                     Toast.makeText(this, R.string.import_success, Toast.LENGTH_SHORT).show()
                     val mode = ConfigManager.getMode(this)
@@ -274,7 +324,63 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     Toast.makeText(this, R.string.import_failed, Toast.LENGTH_SHORT).show()
                 }
-            }.setNegativeButton("取消", null)
+            }.setNegativeButton(R.string.dialog_cancel, null)
             .show()
+    }
+
+    private fun showAboutDialog() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_about, null)
+        val tvVersion = dialogView.findViewById<TextView>(R.id.tv_about_version)
+        val cardRepo = dialogView.findViewById<MaterialCardView>(R.id.card_about_repo)
+
+        tvVersion.text = getString(R.string.about_version_format, BuildConfig.VERSION_NAME)
+        val repoUrl = getString(R.string.about_repo_url)
+
+        val dialog =
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.about_title)
+                .setView(dialogView)
+                .create()
+
+        cardRepo.setOnClickListener {
+            dialog.dismiss()
+            openRepoUrl(repoUrl)
+        }
+        cardRepo.setOnLongClickListener {
+            copyToClipboard("ColorOSFacePass_Repo", repoUrl)
+            Toast.makeText(this, R.string.about_link_copied, Toast.LENGTH_SHORT).show()
+            true
+        }
+
+        dialog.show()
+    }
+
+    private fun toggleLanguage() {
+        val appLocales = AppCompatDelegate.getApplicationLocales()
+        val currentLang =
+            if (!appLocales.isEmpty) {
+                appLocales[0]?.language
+            } else {
+                resources.configuration.locales[0]?.language
+            }
+        val targetTag = if (currentLang == "en") "zh" else "en"
+        AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(targetTag))
+    }
+
+    private fun openRepoUrl(url: String) {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        val opened = runCatching { startActivity(intent) }.isSuccess
+        if (!opened) {
+            copyToClipboard("ColorOSFacePass_Repo", url)
+            Toast.makeText(this, R.string.about_open_failed, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun copyToClipboard(
+        label: String,
+        text: String,
+    ) {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
     }
 }

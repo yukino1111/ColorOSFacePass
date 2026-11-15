@@ -1,0 +1,32 @@
+<resources>
+    <string name="app_name">ColorOSFacePass</string>
+    <string name="app_desc">Allow selected apps to use ColorOS face unlock and auto-confirm biometric prompts</string>
+    <string name="search_hint">Search app name or package...</string>
+    <string name="mode_whitelist">Whitelist</string>
+    <string name="mode_blacklist">Blacklist</string>
+    <string name="filter_all">All</string>
+    <string name="filter_user">User</string>
+    <string name="filter_system">System</string>
+    <string name="system_tag">System</string>
+    <string name="select_all">Select All</string>
+    <string name="deselect_all">Deselect All</string>
+    <string name="action_import">Import Rules</string>
+    <string name="action_export">Export Rules</string>
+    <string name="action_about">About</string>
+    <string name="selected_count_format">%1$d / %2$d selected</string>
+    <string name="empty_apps">No matching apps</string>
+    <string name="export_success">Configuration exported to clipboard</string>
+    <string name="import_success">Configuration imported</string>
+    <string name="import_failed">Import failed, please check JSON format</string>
+    <string name="import_hint">Paste exported JSON configuration here</string>
+    <string name="dialog_import_confirm">Import</string>
+    <string name="dialog_cancel">Cancel</string>
+    <string name="about_title">About</string>
+    <string name="about_version_format">v%1$s</string>
+    <string name="about_repo_title">Source Repository</string>
+    <string name="about_repo_url">https://github.com/yukino1111/ColorOSFacePass</string>
+    <string name="about_link_copied">Repository URL copied to clipboard</string>
+    <string name="about_open_failed">No browser found, URL copied to clipboard</string>
+    <string name="language_switch_label">中/EN</string>
+    <string name="language_switch_cd">Switch language</string>
+</resources>

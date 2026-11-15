@@ -1,0 +1,32 @@
+<resources>
+    <string name="app_name">ColorOSFacePass</string>
+    <string name="app_desc">允许指定应用调用 ColorOS 人脸识别并在验证后自动确认</string>
+    <string name="search_hint">搜索应用名或包名...</string>
+    <string name="mode_whitelist">白名单模式</string>
+    <string name="mode_blacklist">黑名单模式</string>
+    <string name="filter_all">全部</string>
+    <string name="filter_user">用户应用</string>
+    <string name="filter_system">系统应用</string>
+    <string name="system_tag">系统</string>
+    <string name="select_all">全选</string>
+    <string name="deselect_all">全不选</string>
+    <string name="action_import">导入规则</string>
+    <string name="action_export">导出规则</string>
+    <string name="action_about">关于</string>
+    <string name="selected_count_format">已选 %1$d / %2$d</string>
+    <string name="empty_apps">无匹配应用</string>
+    <string name="export_success">配置已导出并复制到剪贴板</string>
+    <string name="import_success">配置导入成功</string>
+    <string name="import_failed">配置导入失败，请检查 JSON 格式</string>
+    <string name="import_hint">请在此粘贴导出的 JSON 配置字符串</string>
+    <string name="dialog_import_confirm">导入</string>
+    <string name="dialog_cancel">取消</string>
+    <string name="about_title">关于</string>
+    <string name="about_version_format">v%1$s</string>
+    <string name="about_repo_title">源代码仓库</string>
+    <string name="about_repo_url">https://github.com/yukino1111/ColorOSFacePass</string>
+    <string name="about_link_copied">仓库链接已复制到剪贴板</string>
+    <string name="about_open_failed">未找到可用浏览器，链接已复制到剪贴板</string>
+    <string name="language_switch_label">中/EN</string>
+    <string name="language_switch_cd">切换中英文</string>
+</resources>

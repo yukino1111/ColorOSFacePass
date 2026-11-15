@@ -7,8 +7,9 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.card.MaterialCardView
 import com.google.android.material.checkbox.MaterialCheckBox
+import com.google.android.material.listitem.ListItemCardView
+import com.google.android.material.listitem.ListItemViewHolder
 import io.github.yukino1111.colorosfacepass.R
 import io.github.yukino1111.colorosfacepass.data.AppInfo
 
@@ -110,25 +111,31 @@ class AppAdapter(
         holder: ViewHolder,
         position: Int,
     ) {
-        holder.bind(displayedApps[position])
+        holder.bind(displayedApps[position], position, displayedApps.size)
     }
 
     override fun getItemCount(): Int = displayedApps.size
 
     inner class ViewHolder(
         itemView: View,
-    ) : RecyclerView.ViewHolder(itemView) {
-        private val cardView: MaterialCardView = itemView.findViewById(R.id.card_view)
+    ) : ListItemViewHolder(itemView) {
+        private val cardView: ListItemCardView = itemView.findViewById(R.id.card_view)
         private val ivIcon: ImageView = itemView.findViewById(R.id.iv_icon)
         private val tvName: TextView = itemView.findViewById(R.id.tv_name)
         private val tvPackage: TextView = itemView.findViewById(R.id.tv_package)
         private val tvSystemTag: TextView = itemView.findViewById(R.id.tv_system_tag)
         private val cbSelected: MaterialCheckBox = itemView.findViewById(R.id.cb_selected)
 
-        fun bind(app: AppInfo) {
+        fun bind(
+            app: AppInfo,
+            position: Int,
+            totalCount: Int,
+        ) {
+            super.bind(position, totalCount)
             tvName.text = app.appName
             tvPackage.text = app.packageName
             tvSystemTag.visibility = if (app.isSystem) View.VISIBLE else View.GONE
+            cardView.isChecked = app.isSelected
             cbSelected.isChecked = app.isSelected
 
             if (app.icon != null) {
@@ -139,6 +146,7 @@ class AppAdapter(
 
             cardView.setOnClickListener {
                 app.isSelected = !app.isSelected
+                cardView.isChecked = app.isSelected
                 cbSelected.isChecked = app.isSelected
                 onSelectionChanged()
             }

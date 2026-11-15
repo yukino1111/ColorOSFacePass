@@ -30,6 +30,13 @@ object BiometricBypassHook {
     private const val EVENT_MAX_WAIT_MS = 1_000L
     private const val DEFERRED_FALLBACK_TIMEOUT_MS = 600L
 
+    private const val CONTAINER_STATE_ANIMATING_IN = 1
+    private const val CONTAINER_STATE_PENDING_DISMISS = 2
+    private const val DISMISSED_BUTTON_POSITIVE = 1
+    private const val DISMISSED_USER_CANCELED = 3
+    private const val DISMISSED_BIOMETRIC_AUTHENTICATED = 4
+    private const val DISMISSED_CREDENTIAL_AUTHENTICATED = 7
+
     private var configField: Field? = null
     private var opPackageNameField: Field? = null
     private var currentDialogField: Field? = null
@@ -39,6 +46,8 @@ object BiometricBypassHook {
     private val animatedInViews = Collections.newSetFromMap(WeakHashMap<View, Boolean>())
     private val pendingConfirmViews = Collections.synchronizedMap(WeakHashMap<View, String>())
     private val confirmedViews = Collections.newSetFromMap(WeakHashMap<View, Boolean>())
+    private val pendingDismissReasons = Collections.synchronizedMap(WeakHashMap<View, Int>())
+    private val replayingDismissReason = ThreadLocal<Pair<View, Int>?>()
 
     @Volatile
     private var confirmButtonId: Int = 0
@@ -61,19 +70,43 @@ object BiometricBypassHook {
         opPackageNameField = configField?.type?.fieldByBaseName(OP_PACKAGE_FIELD)
         containerStateField = targetClass.fieldByBaseName("mContainerState")
 
-        // 1. Hook onDialogAnimatedIn for tracking & executing deferred confirmations
+        // 1. Hook onDialogAnimatedIn for tracking, restoring deferred success reasons, and executing deferred confirms
         val animInMethod = targetClass.zeroArgMethodByBaseName(TARGET_METHOD_ANIMATED_IN)
         if (animInMethod != null) {
+            animInMethod.isAccessible = true
             module.hook(animInMethod).intercept { chain ->
-                val result = chain.proceed()
+                val authContainerView = chain.thisObject as? View
+                val deferredReason =
+                    if (authContainerView != null) {
+                        val saved = pendingDismissReasons.remove(authContainerView)
+                        if (saved != null && readContainerState(authContainerView) == CONTAINER_STATE_PENDING_DISMISS) {
+                            saved
+                        } else {
+                            null
+                        }
+                    } else {
+                        null
+                    }
 
-                val authContainerView = chain.thisObject as? View ?: return@intercept result
+                val result =
+                    if (deferredReason != null && authContainerView != null) {
+                        replayingDismissReason.set(authContainerView to deferredReason)
+                        try {
+                            chain.proceed()
+                        } finally {
+                            replayingDismissReason.remove()
+                        }
+                    } else {
+                        chain.proceed()
+                    }
+
+                if (authContainerView == null) return@intercept result
                 activeContainerView = WeakReference(authContainerView)
                 animatedInViews.add(authContainerView)
 
                 // If face was recognized before the dialog finished animating in, execute deferred confirm now
                 val pendingPkg = pendingConfirmViews.remove(authContainerView)
-                if (pendingPkg != null) {
+                if (pendingPkg != null && !confirmedViews.contains(authContainerView)) {
                     module.log(
                         Log.INFO,
                         TAG,
@@ -89,7 +122,10 @@ object BiometricBypassHook {
             module.log(Log.INFO, TAG, "hooked animated-in on ${targetClass.name}#${animInMethod.name}")
         }
 
-        // 2. Fallback for older Android (10-14): hook onAuthenticationSucceeded(int modality) directly on AuthContainerView if present
+        // 2. Hook animateAway to preserve success dismiss reasons when called during STATE_ANIMATING_IN
+        hookAnimateAway(targetClass)
+
+        // 3. Fallback for older Android (10-14): hook onAuthenticationSucceeded(int modality) directly on AuthContainerView if present
         val authSucceedMethod =
             targetClass.declaredMethods.firstOrNull {
                 it.name == "onAuthenticationSucceeded" &&
@@ -121,6 +157,91 @@ object BiometricBypassHook {
             }
             module.log(Log.INFO, TAG, "hooked onAuthenticationSucceeded fallback on ${targetClass.name}")
         }
+    }
+
+    /**
+     * Preserves success dismissal reasons across AOSP/ColorOS's STATE_ANIMATING_IN -> STATE_PENDING_DISMISS
+     * deferral so onDialogAnimatedIn() does not overwrite biometric confirmation with DISMISSED_USER_CANCELED.
+     */
+    private fun hookAnimateAway(targetClass: Class<*>) {
+        val animateAwayMethod =
+            targetClass.declaredMethods.firstOrNull {
+                it.name == "animateAway" &&
+                    it.parameterCount == 2 &&
+                    it.parameterTypes[0] == Int::class.javaPrimitiveType &&
+                    it.parameterTypes[1] == Boolean::class.javaPrimitiveType
+            }
+                ?: targetClass.declaredMethods.firstOrNull {
+                    it.name == "animateAway" &&
+                        it.parameterCount == 1 &&
+                        it.parameterTypes[0] == Int::class.javaPrimitiveType
+                }
+
+        if (animateAwayMethod == null) {
+            module.log(Log.WARN, TAG, "animateAway not found on ${targetClass.name}")
+            return
+        }
+
+        animateAwayMethod.isAccessible = true
+        module.hook(animateAwayMethod).intercept { chain ->
+            val authContainerView = chain.thisObject as? View
+            val reason = chain.getArg(0) as? Int
+            if (authContainerView == null || reason == null) {
+                return@intercept chain.proceed()
+            }
+
+            val sendReason =
+                if (chain.args.size >= 2) {
+                    chain.getArg(1) as? Boolean ?: true
+                } else {
+                    true
+                }
+
+            val replay = replayingDismissReason.get()
+            if (replay != null && replay.first === authContainerView) {
+                replayingDismissReason.remove()
+                if (reason == DISMISSED_USER_CANCELED) {
+                    val restoredReason = replay.second
+                    val opPackageName = readOpPackageName(authContainerView)
+                    module.log(
+                        Log.INFO,
+                        TAG,
+                        "restored deferred dismiss reason=$restoredReason (was USER_CANCELED) pkg=$opPackageName",
+                    )
+                    val updatedArgs = chain.args.toTypedArray()
+                    updatedArgs[0] = restoredReason
+                    return@intercept chain.proceed(updatedArgs)
+                }
+            }
+
+            val containerState = readContainerState(authContainerView)
+            if (containerState == CONTAINER_STATE_ANIMATING_IN && sendReason && isSuccessDismissReason(reason)) {
+                pendingDismissReasons[authContainerView] = reason
+                confirmedViews.add(authContainerView)
+                pendingConfirmViews.remove(authContainerView)
+                val opPackageName = readOpPackageName(authContainerView)
+                module.log(
+                    Log.INFO,
+                    TAG,
+                    "saved deferred dismiss reason=$reason during animate-in pkg=$opPackageName",
+                )
+            } else {
+                if (containerState != CONTAINER_STATE_ANIMATING_IN) {
+                    pendingDismissReasons.remove(authContainerView)
+                }
+                if (sendReason && isSuccessDismissReason(reason)) {
+                    confirmedViews.add(authContainerView)
+                    pendingConfirmViews.remove(authContainerView)
+                }
+            }
+
+            chain.proceed()
+        }
+        module.log(
+            Log.INFO,
+            TAG,
+            "hooked ${animateAwayMethod.name}(params=${animateAwayMethod.parameterCount}) on ${targetClass.name}",
+        )
     }
 
     private fun hookAuthController(classLoader: ClassLoader) {
@@ -212,12 +333,20 @@ object BiometricBypassHook {
         }
     }
 
+    private fun isSuccessDismissReason(reason: Int): Boolean =
+        reason == DISMISSED_BUTTON_POSITIVE ||
+            reason == DISMISSED_BIOMETRIC_AUTHENTICATED ||
+            reason == DISMISSED_CREDENTIAL_AUTHENTICATED
+
+    private fun readContainerState(authContainerView: View): Int? =
+        runCatching {
+            containerStateField?.getInt(authContainerView)
+        }.getOrNull()
+
     private fun isContainerStateReady(authContainerView: View): Boolean {
-        return runCatching {
-            val state = containerStateField?.getInt(authContainerView) ?: return@runCatching false
-            // STATE_ANIMATING_IN is typically 1; states >= 3 represent fully shown/ready states
-            state >= 3
-        }.getOrDefault(false)
+        val state = readContainerState(authContainerView) ?: return false
+        // STATE_ANIMATING_IN is typically 1; states >= 3 represent fully shown/ready states
+        return state >= 3
     }
 
     private fun triggerFaceConfirm(
