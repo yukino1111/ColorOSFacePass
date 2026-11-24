@@ -7,16 +7,16 @@ plugins {
 
 android {
     namespace = "io.github.yukino1111.colorosfacepass"
-    compileSdk = 36
-    buildToolsVersion = "36.0.0"
+    compileSdk = 37
+    buildToolsVersion = "37.0.0"
 
     defaultConfig {
         applicationId = "io.github.yukino1111.colorosfacepass"
         minSdk = 29
         targetSdk = 36
 
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.1.0"
     }
 
     androidResources {
@@ -170,7 +170,7 @@ tasks.named("check").configure {
 
 dependencies {
     compileOnly(libs.libxposed.api)
-    implementation("io.github.libxposed:service:101.0.0")
+    implementation("io.github.libxposed:service:102.0.0")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.14.0")

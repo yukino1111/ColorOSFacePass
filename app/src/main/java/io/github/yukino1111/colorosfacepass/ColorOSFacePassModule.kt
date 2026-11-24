@@ -2,6 +2,8 @@ package io.github.yukino1111.colorosfacepass
 
 import android.util.Log
 import io.github.libxposed.api.XposedModule
+import io.github.libxposed.api.XposedModuleInterface.HotReloadedParam
+import io.github.libxposed.api.XposedModuleInterface.HotReloadingParam
 import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam
 import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
 import io.github.libxposed.api.XposedModuleInterface.SystemServerStartingParam
@@ -44,6 +46,36 @@ class ColorOSFacePassModule : XposedModule() {
             BiometricBypassHook.hook(param.classLoader)
         } catch (e: Exception) {
             log(Log.ERROR, TAG, "hook failed pkg=$TARGET_PACKAGE", e)
+        }
+    }
+
+    override fun onHotReloading(param: HotReloadingParam): Boolean = true
+
+    override fun onHotReloaded(param: HotReloadedParam) {
+        module = this
+        processName = param.processName
+        val classLoader =
+            param.oldHookHandles
+                .firstOrNull()
+                ?.executable
+                ?.declaringClass
+                ?.classLoader
+                ?: Thread.currentThread().contextClassLoader
+                ?: return
+        param.oldHookHandles.forEach { runCatching { it.unhook() } }
+        ConfigClient.refresh(null)
+        if (processName == TARGET_PACKAGE) {
+            try {
+                BiometricBypassHook.hook(classLoader)
+            } catch (e: Throwable) {
+                log(Log.ERROR, TAG, "hot-reload hook failed pkg=$TARGET_PACKAGE", e)
+            }
+        } else {
+            try {
+                ColorOSFaceFixHook.hook(classLoader)
+            } catch (e: Throwable) {
+                log(Log.ERROR, TAG, "hot-reload failed to install ColorOSFaceFixHook", e)
+            }
         }
     }
 }

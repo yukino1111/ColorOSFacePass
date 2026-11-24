@@ -95,12 +95,12 @@ object ConfigClient {
     ): Boolean {
         refresh(context)
         // If configuration has never been loaded yet (e.g. immediately upon system boot before IPC settles),
-        // fail-safe to allowed=true so ColorOSFaceFixHook does not block face recognition.
+        // fail-safe to allowed=false so unconfigured/unauthorized apps do not bypass biometric strength checks.
         if (!hasLoadedValidConfig && cachedPackages.isEmpty()) {
             runCatching {
-                module.log(Log.INFO, TAG, "isAllowed pkg=$packageName fallback safe allow (no valid config loaded yet)")
+                module.log(Log.INFO, TAG, "isAllowed pkg=$packageName fallback safe deny (no valid config loaded yet)")
             }
-            return true
+            return false
         }
 
         val inList = cachedPackages.contains(packageName)
