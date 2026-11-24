@@ -11,9 +11,10 @@
         android:id="@+id/app_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?attr/colorSurfaceContainerLow"
+        android:background="?attr/colorSurface"
         app:elevation="0dp"
         app:liftOnScroll="true"
+        app:liftOnScrollColor="?attr/colorSurfaceContainerLow"
         app:liftOnScrollTargetViewId="@id/rv_apps">
 
         <com.google.android.material.appbar.MaterialToolbar
@@ -35,7 +36,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/app_name"
-                    android:textAppearance="?attr/textAppearanceHeadlineSmallEmphasized"
+                    android:textAppearance="?attr/textAppearanceTitleLargeEmphasized"
                     android:textColor="?attr/colorOnSurface" />
 
                 <com.google.android.material.button.MaterialButton
@@ -65,7 +66,7 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:paddingHorizontal="16dp"
-            android:paddingBottom="12dp">
+            android:paddingBottom="8dp">
 
             <!-- MD3E Search pill -->
             <com.google.android.material.textfield.TextInputLayout
@@ -110,7 +111,7 @@
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_whitelist"
-                    style="@style/Widget.Material3Expressive.Button.OutlinedButton"
+                    style="@style/Widget.Material3Expressive.Button.TonalButton"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
@@ -119,7 +120,7 @@
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_blacklist"
-                    style="@style/Widget.Material3Expressive.Button.OutlinedButton"
+                    style="@style/Widget.Material3Expressive.Button.TonalButton"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
@@ -158,24 +159,21 @@
                             style="@style/Widget.Material3.Chip.Filter"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="@string/filter_all"
-                            app:chipCornerRadius="12dp" />
+                            android:text="@string/filter_all" />
 
                         <com.google.android.material.chip.Chip
                             android:id="@+id/chip_user"
                             style="@style/Widget.Material3.Chip.Filter"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="@string/filter_user"
-                            app:chipCornerRadius="12dp" />
+                            android:text="@string/filter_user" />
 
                         <com.google.android.material.chip.Chip
                             android:id="@+id/chip_system"
                             style="@style/Widget.Material3.Chip.Filter"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="@string/filter_system"
-                            app:chipCornerRadius="12dp" />
+                            android:text="@string/filter_system" />
                     </com.google.android.material.chip.ChipGroup>
                 </HorizontalScrollView>
 
@@ -186,7 +184,7 @@
                     android:layout_marginStart="8dp"
                     android:background="@drawable/bg_pill_primary"
                     android:paddingHorizontal="10dp"
-                    android:paddingVertical="4dp"
+                    android:paddingVertical="3dp"
                     android:textAppearance="?attr/textAppearanceLabelMediumEmphasized"
                     android:textColor="?attr/colorOnPrimaryContainer"
                     android:visibility="invisible"
@@ -206,7 +204,7 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:clipToPadding="false"
-            android:paddingTop="8dp"
+            android:paddingTop="4dp"
             android:paddingBottom="16dp"
             tools:listitem="@layout/item_app" />
 

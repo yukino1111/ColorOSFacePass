@@ -44,6 +44,7 @@ import kotlinx.coroutines.withContext
 class MainActivity : AppCompatActivity() {
     private lateinit var appBar: AppBarLayout
     private lateinit var toolbar: MaterialToolbar
+    private lateinit var tvToolbarTitle: TextView
     private lateinit var btnLanguage: MaterialButton
     private lateinit var etSearch: TextInputEditText
     private lateinit var toggleMode: MaterialButtonToggleGroup
@@ -74,6 +75,7 @@ class MainActivity : AppCompatActivity() {
         setSupportActionBar(toolbar)
         supportActionBar?.setDisplayShowTitleEnabled(false)
 
+        tvToolbarTitle = findViewById(R.id.tv_toolbar_title)
         btnLanguage = findViewById(R.id.btn_language)
         etSearch = findViewById(R.id.et_search)
         toggleMode = findViewById(R.id.toggle_mode)
@@ -129,6 +131,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupListeners() {
+        tvToolbarTitle.setOnLongClickListener {
+            showAboutDialog()
+            true
+        }
+
         btnLanguage.setOnClickListener {
             toggleLanguage()
         }
@@ -270,11 +277,6 @@ class MainActivity : AppCompatActivity() {
 
             R.id.action_import -> {
                 showImportDialog()
-                true
-            }
-
-            R.id.action_about -> {
-                showAboutDialog()
                 true
             }
 

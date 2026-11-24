@@ -49,10 +49,10 @@ class AppAdapter(
         }
     }
 
-    @SuppressLint("NotifyDataSetChanged")
     fun selectAllDisplayed(select: Boolean) {
+        if (displayedApps.isEmpty()) return
         displayedApps.forEach { it.isSelected = select }
-        notifyDataSetChanged()
+        notifyItemRangeChanged(0, displayedApps.size)
         onSelectionChanged()
     }
 
