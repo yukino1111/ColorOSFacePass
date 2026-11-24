@@ -26,6 +26,10 @@
 ## 致谢
 
 本模块基于以下开源项目借鉴与整合：  
-[biometric-bypass](https://github.com/hxreborn/biometric-bypass)（起步 Commit: [`c710ac8`](https://github.com/hxreborn/biometric-bypass/commit/c710ac84dd65ae81a70475b03fd572e87a4045fd)）  
-[FaceBiometricFix](https://github.com/WAYYYAW/FaceBiometricFix)（起步 Commit: [`6462515`](https://github.com/WAYYYAW/FaceBiometricFix/commit/64625153e66ac48369656c528168cf2821ee5d9d)）  
+[biometric-bypass](https://github.com/hxreborn/biometric-bypass)（MIT License，起步 Commit: [`c710ac8`](https://github.com/hxreborn/biometric-bypass/commit/c710ac84dd65ae81a70475b03fd572e87a4045fd)）  
+[FaceBiometricFix](https://github.com/WAYYYAW/FaceBiometricFix)（GPL-3.0 License，起步 Commit: [`6462515`](https://github.com/WAYYYAW/FaceBiometricFix/commit/64625153e66ac48369656c528168cf2821ee5d9d)）  
 模块使用 [LibXposed](https://github.com/libxposed/api) 构建
+
+## 开源协议
+
+本项目基于 [GPL-3.0](LICENSE) 协议开源，第三方版权与 MIT 声明保留见 [NOTICE](NOTICE)。
